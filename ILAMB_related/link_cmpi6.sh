@@ -3,22 +3,26 @@
 #set -x 
 
 
-expname="1pctCO2"
-expname="amip"
+cmipdir="/global/cscratch1/sd/cmip6/CMIP6/"
+
+mipname="LS3MIP"
+expname="land-hist"
 ensname="r1i1p1f1"
-
-
 dmnames=(Lmon Amon)
+linkdir=/global/homes/m/minxu/scratch/CMIP6_ILAMB/LS3MIP_MODEL/
 
-linkdir=/global/homes/m/minxu/scratch/CMIP6_ILAMB/MODEL/
+
+### PLEASE CHANGE ABOVE VARIABLES TO FIX YOUR NEED !!! ###
+
+
 workdir=`pwd`
 
 for domname in "${dmnames[@]}"; do
-     out=(`ls  CMIP6/CMIP/*/*/$expname/$ensname/$domname/*/*/*/ -d`)
+     out=(`ls  $cmipdir/$mipname/*/*/$expname/$ensname/$domname/*/*/*/ -d`)
      
      
      for mdname in "${out[@]}"; do 
-         if [[ $mdname =~ CMIP6/CMIP/(.*)/(.*)/$expname/$ensname/$domname/(.*)/(g.*)/(v.*)/ ]]; then
+         if [[ $mdname =~ $cmipdir/$mipname/(.*)/(.*)/$expname/$ensname/$domname/(.*)/(g.*)/(v.*)/ ]]; then
             ctrname=${BASH_REMATCH[1]}
             modname=${BASH_REMATCH[2]}
             varname=${BASH_REMATCH[3]}
@@ -28,7 +32,7 @@ for domname in "${dmnames[@]}"; do
      
             #echo $modname $varname $grdname $vername
      
-            out=(`ls CMIP6/CMIP/$ctrname/$modname/$expname/$ensname/$domname/$varname/`)
+            out=(`ls $cmipdir/$mipname/$ctrname/$modname/$expname/$ensname/$domname/$varname/`)
      
             numgrid=${#out[@]}
             if [[ ${#out[@]} -ne 1 ]]; then
@@ -42,7 +46,7 @@ for domname in "${dmnames[@]}"; do
             fi
      
      
-            out=(`ls CMIP6/CMIP/$ctrname/$modname/$expname/$ensname/$domname/$varname/$grdname`)
+            out=(`ls $cmipdir/$mipname/$ctrname/$modname/$expname/$ensname/$domname/$varname/$grdname`)
             numvern=${#out[@]}
             #echo $numvern
      

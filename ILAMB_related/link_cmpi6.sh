@@ -1,20 +1,35 @@
 #!/usr/bin/env bash
 
-set -x 
 
-cmipdir="/global/cfs/projectdirs/m3522/cmip6/CMIP6/"
-mipname="LS3MIP"
-expname="land-hist"
-#mipname="CMIP"
-#expname="historical"
-#ensname="r1i1p1f1"
+# Please modify the following variables accordingly
+
+#--------------------------------------------------------------------------------------
+cmipdir=THE_CMIP6_TOP_DIRECTORY
+mipname=LS3MIP
+expname=land-hist
 ensname='*'
 dmnames=(fx Lmon Amon Emon)
-#linkdir=/global/cfs/projectdirs/m2467/prj_minxu/elm_ls3mip/
-linkdir=/global/cfs/projectdirs/m2467/prj_minxu/temp2/
+linkdir=THE_LINKED_DIRECTORY
+#--------------------------------------------------------------------------------------
 
 
-#incmodels=(BCC-CSM2-MR BCC-ESM1 CESM2-WACCM CESM2 CanESM5 EC-Earth3-Veg GISS-E2-1-G INM-CM4-8 IPSL-CM6A-LR) 
+
+
+# Do not modify below
+cmrvars=($(cat cmip.cfg |grep -i ^variable  |cut -d = -f2 |sed 's/"//g'))
+altvars=($(cat cmip.cfg |grep -i ^alternate |cut -d = -f2 |sed 's/"//g'))
+dervars=($(cat cmip.cfg |grep -i ^derived   |cut -d = -f2 |sed 's/"//g'))
+
+varsarr+=(${cmrvars[@]})
+varsarr+=(${altvars[@]})
+
+for v in "${dervars[@]}"; do
+    varsarr+=($(echo $v |sed  's/[+-]/ /g'|sed 's/"//g'))
+done
+
+declare -A uniq 
+for i in "${varsarr[@]}"; do uniq["$i"]=1; done
+incVars=(${!uniq[@]})
 incmodels=()
 
 landfrc="sftlf"
@@ -49,14 +64,15 @@ for domname in "${dmnames[@]}"; do
 	    testland[$modname]=""
 	    testarea[$modname]=""
      
-	    if [[ "$modname" == "CNRM-CM6-1" ]]; then
-                echo $modname $varname $grdname $vername $mdname
-            fi
 
-
+            # skip
             if [[ ${#ArrayName[@]} -gt 0 && ! " ${incmodels[@]} " =~ " ${modname} " ]]; then
                continue
             fi
+
+	    if [[ ! " ${incVars[@]} " =~ " ${varname} " ]]; then
+               continue
+	    fi
 
 
             if [[ $domname == 'fx' && (${testland[$modname]} != $landfrc || ${testarea[$modname]} != $areacel) ]]; then
@@ -64,6 +80,7 @@ for domname in "${dmnames[@]}"; do
 	       # try to find area and sftlf under the mip and ens directories first
 	       # link will be done with other variables
                tmp=(`ls $cmipdir/$mipname/$ctrname/$modname/$expname/$ensname/$domname/`)
+
                if [[ ${tmp[*]} =~ $landfrc ]]; then
                    testland[$modname]=$landfrc
                fi
@@ -72,24 +89,15 @@ for domname in "${dmnames[@]}"; do
                    testarea[$modname]=$areacel
                fi
 
-	       if [[ $modname == "CNRM-ESM2-1" ]]; then
-                   echo testland[$modname],  testarea[$modname]
-		   if [[ ${testland[$modname]} != $landfrc ]]; then
-			   echo noeq true
-		   else
-			 echo equal ${tmp[*]}
-	            fi
-		   echo ${testarea[$modname]} != $areacel
-	       fi
-
                # expand to other mip and ensemble same model and grdname
                if [[ ${testland[$modname]} != $landfrc || ${testarea[$modname]} != $areacel ]]; then
-                  #/global/homes/m/minxu/CMIP6/CMIP/NCAR/CESM2/*/r1i1p1f1/fx/sftlf/gn/v20190308
-                  #tmp=(`ls $cmipdir/CMIP/$ctrname/$modname/*/r1i1p1f1/fx/$landfrc/$grdname/* -d`)
+
+                  echo "cannot find areacella and landfrac variables, try to find them in other MIP/experiments!!!"
+		  file_landfrac=""
+		  file_areacell=""
 
                   searchmips=( $mipname 'CMIP' )
 		  for mip in "${searchmips[@]}"; do
-
                       tmp=(`ls $cmipdir/$mip/$ctrname/$modname/*/*/fx/$landfrc/$grdname/* -d`)
                       for t in "${tmp[@]}"; do
                          file_landfrac=`ls $t/*.nc`
@@ -104,6 +112,8 @@ for domname in "${dmnames[@]}"; do
 
 	              if [[ "$ensname" != "r1i1p1f1" ]]; then
 	                 xmodname=$modname-$ensname
+		      else
+			 xmodname=$modname
                       fi
                       
                       if [[ ! -d $linkdir/$xmodname ]]; then
@@ -111,7 +121,9 @@ for domname in "${dmnames[@]}"; do
                       fi
 
 		      if [[ ${testland[$modname]} != $landfrc && ! -z "$file_landfrac" ]]; then
+
                          apath=`readlink -f $file_landfrac`
+			 echo "link ..." $apath $linkdir/$xmodname
                          cd $linkdir/$xmodname && ln -sf $apath . && cd  $workdir
                          testland[$modname]=$landfrc
 		      fi
@@ -130,7 +142,7 @@ for domname in "${dmnames[@]}"; do
                fi
             fi
 
-
+            # if there are many grids, skip the native one as they are usually cubed sphere grids
             outgrd=(`ls $cmipdir/$mipname/$ctrname/$modname/$expname/$ensname/$domname/$varname/`)
             numgrid=${#outgrd[@]}
             if [[ ${#outgrd[@]} -ne 1 ]]; then
@@ -139,35 +151,23 @@ for domname in "${dmnames[@]}"; do
                 if [[ $grdname -eq 'gn' ]]; then
                    continue
                 fi
-     
-                echo "xxxxx"
             fi
      
      
+            # find the latest version
             outver=(`ls $cmipdir/$mipname/$ctrname/$modname/$expname/$ensname/$domname/$varname/$grdname`)
             numvern=${#outver[@]}
-            #echo $numvern
-     
             if [[ $numvern -ne 1 ]]; then
-     
                 IFS=$'\n' sorted=($(sort <<<"${outver[*]}"))
                 unset IFS
-     
-     
-               if [[ "$vername" != ${sorted[-1]} ]]; then
-                  #echo "skip" $vername
-                  continue
-               fi
+                if [[ "$vername" != ${sorted[-1]} ]]; then
+                   continue
+                fi
             fi
      
            
-            echo 'zzzz', $mdname
-     
             apath=`readlink -f $mdname`
      
-      
-            #echo $apath
-
 	    if [[ "$ensname" != "r1i1p1f1" ]]; then
 		   modname=$modname-$ensname
             fi
@@ -178,17 +178,10 @@ for domname in "${dmnames[@]}"; do
             fi
      
             cd $linkdir/$modname && ln -sf $apath/*.nc .
-     
-            #cd $linkdir && mkdir ${BASH_REMATCH[2]}
-            #cd $workdir
-            #cd $linkdir/${BASH_REMATCH[2]} && ln -sf $workdir/$mdname/* .
-     
-            #need to check again to remove the gn gr grid and different version
-     
+
             cd $workdir
          else
             echo "no match"
          fi
      done
-
 done
